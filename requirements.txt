@@ -1,0 +1,12 @@
+demucs
+gradio
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch
+torchaudio
+numpy
+ffmpeg-python
+openai-whisper
+soundfile
+pydub
+psutil
+ffmpeg-python

@@ -40,9 +40,71 @@ app = FastAPI()
 MODEL_CACHE = {}
 WHISPER_MODEL = None
 
+# Application state
+app_state = {"status": "installing", "detail": "Starting installation"}
+
 # Semaphore to limit concurrent jobs
 MAX_CONCURRENT_JOBS = 2  # Adjust based on VRAM and performance
 gpu_semaphore = threading.Semaphore(MAX_CONCURRENT_JOBS)
+
+# -------------------- HEALTH CHECK ENDPOINT -------------------- #
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for the middleman API."""
+    if app_state["status"] != "ready":
+        raise HTTPException(
+            status_code=503,
+            detail=f"System is {app_state['status']}: {app_state.get('detail', '')}"
+        )
+    return {
+        "status": "ready",
+        "device": DEVICE,
+        "models_loaded": {
+            "demucs": bool(MODEL_CACHE),
+            "whisper": bool(WHISPER_MODEL)
+        }
+    }
+
+# -------------------- STARTUP SEQUENCE -------------------- #
+def startup_sequence():
+    """Initialize models and prepare the application."""
+    try:
+        # Update status to installing
+        app_state["status"] = "installing"
+        app_state["detail"] = "Loading Demucs model"
+        
+        # Load Demucs model
+        get_demucs_model("htdemucs_ft")
+        
+        # Update status to loading Whisper
+        app_state["detail"] = "Loading Whisper model"
+        
+        # Load Whisper model
+        load_whisper_model()
+        
+        # Update status to ready
+        app_state["status"] = "ready"
+        app_state["detail"] = "All models loaded successfully"
+        logging.info("Application startup complete - ready to process requests")
+        
+    except Exception as e:
+        app_state["status"] = "error"
+        app_state["detail"] = f"Startup failed: {str(e)}"
+        logging.error(f"Startup sequence failed: {e}", exc_info=True)
+        raise
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the initialization sequence in a background thread."""
+    threading.Thread(target=startup_sequence, daemon=True).start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on shutdown."""
+    logging.info("Shutting down. Clearing GPU memory...")
+    torch.cuda.empty_cache()
+    gc.collect()
+    logging.info("Shutdown complete.")
 
 # -------------------- MODEL LOADING HELPERS -------------------- #
 def get_demucs_model(model_name: str):
@@ -412,39 +474,6 @@ async def api_transcribe(file: UploadFile = File(...)):
         # Ensure the semaphore is released in case of unexpected errors
         if acquired:
             gpu_semaphore.release()
-
-# -------------------- APPLICATION STARTUP -------------------- #
-@app.on_event("startup")
-def startup_event():
-    """
-    Load models at startup to ensure they're ready for incoming requests.
-    """
-    logging.info("Starting up and loading models...")
-    
-    # Load Demucs_ft model
-    try:
-        get_demucs_model("htdemucs_ft")
-    except Exception as e:
-        logging.error(f"Failed to load htdemucs_ft model: {e}", exc_info=True)
-    
-    # Load Whisper model
-    try:
-        load_whisper_model()
-    except Exception as e:
-        logging.error(f"Failed to load Whisper model: {e}", exc_info=True)
-    
-    logging.info("All models loaded and ready.")
-
-# -------------------- APPLICATION SHUTDOWN -------------------- #
-@app.on_event("shutdown")
-def shutdown_event():
-    """
-    Clean up resources on shutdown.
-    """
-    logging.info("Shutting down. Clearing GPU memory...")
-    torch.cuda.empty_cache()
-    gc.collect()
-    logging.info("Shutdown complete.")
 
 # -------------------- MAIN -------------------- #
 if __name__ == "__main__":

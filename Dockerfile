@@ -1,3 +1,4 @@
+# Use the full development CUDA base image
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 # Set environment variables
@@ -20,29 +21,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
     curl \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set up working directory
 WORKDIR /app
 
 # Copy application files
 COPY app.py requirements.txt ./
-COPY restart.sh /usr/local/bin/restart.sh
-
-# Make restart script executable
-RUN chmod +x /usr/local/bin/restart.sh
-
-# Create directories for models
-RUN mkdir -p /app/torch /app/models
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download and cache models
-RUN python3 -c "import torch; from demucs.pretrained import get_model; model = get_model('htdemucs_ft'); import whisper; model = whisper.load_model('large-v3')"
+RUN python3 -c "\
+import torch; \
+from demucs.pretrained import get_model; \
+import whisper; \
+print('Downloading and caching models...'); \
+get_model('htdemucs_ft'); \
+whisper.load_model('large-v3'); \
+print('Model caching complete.')"
 
 # Expose the FastAPI port
 EXPOSE 8000
 
-# Set the entrypoint to the restart script
-ENTRYPOINT ["/usr/local/bin/restart.sh"] 
+# Set the default command to run the application
+CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

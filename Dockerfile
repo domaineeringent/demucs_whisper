@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy application files
-COPY whisper-demucs-v2-serverless.py requirements.txt ./
+COPY app.py requirements.txt ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -44,4 +44,4 @@ whisper.load_model('large-v3'); \
 print('Model caching complete.')"
 
 # Run the serverless handler
-CMD ["python3", "whisper-demucs-v2-serverless.py"]
+CMD ["python3", "app.py"]

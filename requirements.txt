@@ -13,3 +13,5 @@ ffmpeg-python
 fastapi
 uvicorn
 python-multipart
+runpod
+base64

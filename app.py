@@ -17,6 +17,8 @@ import threading
 import soundfile as sf
 import torchaudio
 import ffmpeg
+import base64
+import runpod
 
 from demucs.pretrained import get_model
 from demucs.apply import apply_model
@@ -481,3 +483,33 @@ if __name__ == "__main__":
 
     # Launch FastAPI (Uvicorn)
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+def handler(job):
+    """
+    This replaces your /api/transcribe endpoint
+    Input comes in job["input"] instead of as a file upload
+    """
+    try:
+        # Get base64 audio from input
+        input_data = job["input"]
+        audio_data = input_data["file"]
+        
+        # Convert base64 to temp file
+        temp_file = "/tmp/input.wav"
+        with open(temp_file, "wb") as f:
+            f.write(base64.b64decode(audio_data))
+            
+        # Use your existing processing pipeline
+        status, final_zip = process_audio_pipeline(temp_file)
+        
+        # Convert result to base64
+        with open(final_zip, "rb") as f:
+            zip_data = base64.b64encode(f.read()).decode("utf-8")
+            
+        return {"file": zip_data}
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+# Start the serverless handler (instead of uvicorn)
+runpod.serverless.start({"handler": handler})

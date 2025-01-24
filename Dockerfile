@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy application files
-COPY app.py requirements.txt ./
+COPY whisper-demucs-v2-serverless.py requirements.txt ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -43,8 +43,5 @@ get_model('htdemucs_ft'); \
 whisper.load_model('large-v3'); \
 print('Model caching complete.')"
 
-# Expose the FastAPI port
-EXPOSE 8000
-
-# Set the default command to run the application
-CMD ["python3", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the serverless handler
+CMD ["python3", "whisper-demucs-v2-serverless.py"]
